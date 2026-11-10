@@ -2,12 +2,15 @@
 
     data-factory ews-predict --input <folder> --output ranked.csv
 
-The folder holds new orders in the Olist file format (same names, same columns):
-  required  olist_orders_dataset.csv, olist_order_items_dataset.csv,
-            olist_order_payments_dataset.csv, olist_customers_dataset.csv
-  optional  olist_products_dataset.csv, olist_sellers_dataset.csv,
-            product_category_name_translation.csv (needed only for products/sellers the
-            database does not know yet)
+The input is the orders file itself or the folder that holds it, in the Olist file format
+(same names, same columns):
+  required  olist_orders_dataset.csv
+  optional  olist_order_items_dataset.csv, olist_order_payments_dataset.csv,
+            olist_customers_dataset.csv, olist_products_dataset.csv, olist_sellers_dataset.csv,
+            product_category_name_translation.csv
+A part that is not given is taken from the database when it knows the order (a held-back time
+slice of Olist); otherwise those features are missing and the model fills them as in training.
+Every order of the input file gets a row in the output.
 Review files are ignored: a review is the future of an order.
 
 The new rows take the road of the training rows, so no rule is written twice:
@@ -35,8 +38,8 @@ from data_factory.exceptions import MissingInputError
 from data_factory.olist_contract import TABLES
 from data_factory.table_validation import QUARANTINE_FILE, validate_tables
 
-REQUIRED = ("orders", "order_items", "order_payments", "customers")
-OPTIONAL = ("product_categories", "sellers", "products")
+REQUIRED = ("orders",)
+OPTIONAL = ("product_categories", "sellers", "products", "customers", "order_items", "order_payments")
 SCORING_SQL = SQL_DIR / "30_scoring.sql"
 LIVE_QUERY = "SELECT * FROM order_features_live WHERE order_id::text = ANY(:ids) ORDER BY order_id"
 
@@ -87,6 +90,9 @@ def predict_folder(config: Config, folder: Path, output: Path) -> pd.DataFrame:
         finally:
             transaction.rollback()                        # nothing stays in the database
 
+    missing = len(ids) - len(live)
+    if missing:
+        raise MissingInputError(f"{missing} order(s) of the input could not be scored")
     features = em.prepare_types(live)
     ranked = rank_orders(joblib.load(model_file), features, config.ews.capacity)
     output = Path(output)

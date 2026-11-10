@@ -86,7 +86,7 @@ base AS (
            it.main_category,
            zc.latitude AS c_lat, zc.longitude AS c_lng, zs.latitude AS s_lat, zs.longitude AS s_lng
     FROM decision_orders d
-    JOIN customers cu USING (customer_id)
+    LEFT JOIN customers cu USING (customer_id)    -- a new order may come without its customer row
     LEFT JOIN items it USING (order_id)
     LEFT JOIN main_seller ms USING (order_id)
     LEFT JOIN sellers se USING (seller_id)
