@@ -65,7 +65,7 @@ class Split:
 def temporal_split(frame: pd.DataFrame, cutoff, end) -> Split:
     """Train: decided before the cut-off AND label known before it (what a team training on the
     cut-off day would have). Test: decided in [cutoff, end) with a review. Orders without a
-    review have no label: kept out of both, still scored by the follow-up list (D78)."""
+    review have no label: kept out of both, still scored by the follow-up list (D79)."""
     cutoff, end = pd.Timestamp(cutoff), pd.Timestamp(end)
     labelled = frame[LABEL].notna()
     before = frame[TIME] < cutoff

@@ -1,4 +1,4 @@
-"""Stage 4: the whole early-warning system with one command, each stage timed (D84).
+"""Stage 4: the whole early-warning system with one command, each stage timed (D73).
 
     data-factory early-warning      empty server -> follow-up list
 

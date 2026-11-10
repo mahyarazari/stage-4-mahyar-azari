@@ -1,4 +1,4 @@
-"""Rank new orders with the saved early-warning model (D85).
+"""Rank new orders with the saved early-warning model (D84).
 
     data-factory ews-predict --input <folder> --output ranked.csv
 

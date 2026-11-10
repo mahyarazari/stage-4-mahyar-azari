@@ -1,4 +1,4 @@
--- Prediction path (D85): new Olist rows, already checked by the contract and written to
+-- Prediction path (D84): new Olist rows, already checked by the contract and written to
 -- temporary text tables pg_temp.new_<table>, are added to the Olist tables so that the same
 -- feature view computes their features. Rows that already exist are left as they are.
 -- The caller runs this inside a transaction and rolls it back: nothing stays.
