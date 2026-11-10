@@ -232,6 +232,27 @@ def baseline_scores(frame: pd.DataFrame, column: str, train: pd.DataFrame) -> np
     return frame[column].fillna(train[column].median()).to_numpy(dtype=float)
 
 
+def rolling_origin(frame: pd.DataFrame, origins, horizon_days: int, candidate: str, seed: int,
+                   recency_days: float, capacity: float) -> pd.DataFrame:
+    """The whole procedure again from several cut-offs (D87): for each origin, train on what was
+    known then (same maturity rule), choose the baseline column on that training part, and score
+    the next `horizon_days`. One split can be lucky; several show the spread."""
+    rows = []
+    for origin in origins:
+        origin = pd.Timestamp(origin)
+        split = temporal_split(frame, origin, origin + pd.Timedelta(days=horizon_days))
+        train, test = split.train, split.test
+        column, _ = choose_baseline(train, capacity)
+        model = fit_candidate(candidate, train, seed, recency_days)
+        scores = model.predict_proba(test)[:, 1]
+        r = report(test[LABEL], scores, test[TIME], capacity)
+        b = report(test[LABEL], baseline_scores(test, column, train), test[TIME], capacity)
+        rows.append({"origin": str(origin.date()), "train": len(train), "test": len(test),
+                     "negative_rate": r["base_rate"], "model_capture": r["capture"], "baseline_rule": column,
+                     "baseline_capture": b["capture"], "gain": r["capture"] - b["capture"], "roc_auc": r["roc_auc"]})
+    return pd.DataFrame(rows)
+
+
 def psi(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
     """Population stability index: bins from the training quantiles (numbers) or categories."""
     expected, actual = expected.dropna(), actual.dropna()

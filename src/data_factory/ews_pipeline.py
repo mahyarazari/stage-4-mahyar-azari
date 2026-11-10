@@ -157,6 +157,9 @@ def stage_model(config: Config) -> dict:
     in_last = (test[TIME].dt.to_period("M") == last_month).to_numpy()
     last = em.report(y_test[in_last], final[in_last], test[TIME][in_last], E.capacity)
 
+    rolling = em.rolling_origin(frame, E.rolling_origins, E.rolling_horizon_days, family, E.seed, E.recency_days,
+                                E.capacity)
+
     key_features = ["n_items", "total_freight", "promised_days", "seller_prior_negative_rate", "distance_km",
                     "holidays_in_window", "promised_working_days", "approval_hours", "customer_state", "main_category"]
     tables = {
@@ -165,6 +168,7 @@ def stage_model(config: Config) -> dict:
         "capacity_baseline": em.capacity_table(y_test, em.baseline_scores(test, column, train), test[TIME], E.capacities),
         "monthly": em.monthly(y_test, final, test[TIME], E.capacity),
         "drift": em.drift_table(train, test, key_features),
+        "rolling": rolling,
         "audit": audit_table(),
     }
     for name, table in tables.items():
