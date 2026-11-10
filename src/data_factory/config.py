@@ -124,6 +124,21 @@ class CreditConfig:
 
 
 @dataclass(frozen=True)
+class EwsConfig:
+    """Stage 4, early-warning system: negative reviews predicted at approval time."""
+    holidays_url: str            # BrasilAPI national holidays, one request per year (D74)
+    holidays_years: tuple[int, ...]
+    load: LoadConfig
+    cutoff: pd.Timestamp         # train on decisions before it, evaluate after (D76)
+    evaluation_end: pd.Timestamp  # end of the evaluation period (exclusive)
+    capacity: float              # share of orders the support team can follow up (operating point)
+    capacities: tuple[float, ...]  # capacities of the manager's table
+    seed: int
+    feature_budget_ms: float     # limit for the feature query (server execution time)
+    output_dir: Path             # model, follow-up list, timings, plans
+
+
+@dataclass(frozen=True)
 class DashboardConfig:
     start: pd.Timestamp       # period the dashboard queries are measured on
     end: pd.Timestamp         # (end exclusive)
@@ -150,6 +165,7 @@ class Config:
     load: LoadConfig
     olist: OlistConfig
     credit: CreditConfig
+    ews: EwsConfig
     dashboard: DashboardConfig
 
 
@@ -383,6 +399,31 @@ def _read_credit(data: dict[str, Any], base: Path) -> CreditConfig:
             model_file=model_file if model_file.is_absolute() else (base / model_file).resolve()))
 
 
+def _read_ews(data: dict[str, Any], base: Path) -> EwsConfig:
+    section = _section(data, "ews")
+    where = "ews"
+    years = _get(section, where, "holidays_years", list)
+    if not years or not all(isinstance(y, int) and not isinstance(y, bool) for y in years):
+        raise ConfigError(f"[{where}] holidays_years must be a non-empty list of years")
+    cutoff = pd.Timestamp(_get(section, where, "cutoff", datetime))
+    end = pd.Timestamp(_get(section, where, "evaluation_end", datetime))
+    if cutoff >= end:
+        raise ConfigError(f"[{where}] cutoff ({cutoff}) must be before evaluation_end ({end})")
+    capacity = float(_get(section, where, "capacity", float))
+    capacities = tuple(float(c) for c in _get(section, where, "capacities", list))
+    if not all(0 < c < 1 for c in (capacity, *capacities)):
+        raise ConfigError(f"[{where}] capacity and capacities must be shares between 0 and 1")
+    output = Path(_get(section, where, "output_dir", str))
+    load = _read_load(data, base, name="ews.load")
+    return EwsConfig(
+        holidays_url=_get(section, where, "holidays_url", str).rstrip("/"), holidays_years=tuple(sorted(years)),
+        load=load, cutoff=cutoff, evaluation_end=end, capacity=capacity, capacities=capacities,
+        seed=int(_get(section, where, "seed", int)),
+        feature_budget_ms=float(_positive(_get(section, where, "feature_budget_ms", (int, float)),
+                                          f"[{where}] feature_budget_ms")),
+        output_dir=output if output.is_absolute() else (base / output).resolve())
+
+
 def _read_dashboard(data: dict[str, Any]) -> DashboardConfig:
     section = _section(data, "dashboard")
     start = _get(section, "dashboard", "start", datetime)
@@ -430,5 +471,6 @@ def load_config(path: str | Path) -> Config:
         load=_read_load(data, base=path.parent),
         olist=_read_olist(data, base=path.parent),
         credit=_read_credit(data, base=path.parent),
+        ews=_read_ews(data, base=path.parent),
         dashboard=_read_dashboard(data),
     )

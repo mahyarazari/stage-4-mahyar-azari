@@ -19,7 +19,7 @@ from pathlib import Path
 
 from sqlalchemy import text
 
-from data_factory import benchmark, credit_pipeline, olist_pipeline, pipeline
+from data_factory import benchmark, credit_pipeline, holidays_pipeline, olist_pipeline, pipeline
 from data_factory.config import load_config
 from data_factory.db import database, ensure_database, safe_url, server_version
 from data_factory.exceptions import ExitCode, FactoryError
@@ -30,8 +30,8 @@ DEFAULT_CONFIG = Path("factory.toml")
 LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 
 
-DATASETS = ("nyc311", "olist", "credit")
-PIPELINES = {"olist": olist_pipeline, "credit": credit_pipeline}
+DATASETS = ("nyc311", "olist", "credit", "holidays")
+PIPELINES = {"olist": olist_pipeline, "credit": credit_pipeline, "holidays": holidays_pipeline}
 
 
 def _stage_order(dataset: str) -> tuple[str, ...]:
