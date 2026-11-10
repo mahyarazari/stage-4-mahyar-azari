@@ -76,8 +76,12 @@ def temporal_split(frame: pd.DataFrame, cutoff, end) -> Split:
               "before_cutoff_labelled": int((before & labelled).sum()),
               "dropped_label_not_known_at_cutoff": int((before & labelled & ~mature).sum()),
               "train": len(train), "test": len(test), "after_end": int((frame[TIME] >= end).sum()),
-              "train_negative_rate": float(train[LABEL].mean()), "test_negative_rate": float(test[LABEL].mean())}
+              "train_negative_rate": _rate(train), "test_negative_rate": _rate(test)}
     return Split(train=train.reset_index(drop=True), test=test.reset_index(drop=True), counts=counts)
+
+
+def _rate(part: pd.DataFrame) -> float:
+    return float(part[LABEL].astype("float64").mean()) if len(part) else float("nan")
 
 
 # ---------------------------------------------------------------- models

@@ -105,7 +105,7 @@ def check_columns(columns) -> list[str]:
     """Problems with a set of model input columns; empty when every column is audited and allowed."""
     problems = []
     for column in columns:
-        audit = AUDIT.get(column)
+        audit = AUDIT.get(column, TEMPTING.get(column))
         if audit is None:
             problems.append(f"{column}: not in the temporal audit")
         elif not audit.allowed:
