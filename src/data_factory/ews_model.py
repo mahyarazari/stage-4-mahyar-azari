@@ -120,12 +120,46 @@ def model_inputs(pipeline: Pipeline) -> list[str]:
     return columns
 
 
-def fit(kind: str, train: pd.DataFrame, seed: int, allow_leaky: bool = False, **options) -> Pipeline:
+def recency_weights(train: pd.DataFrame, days: float) -> np.ndarray:
+    """Weight exp(-age / days), age counted back from the newest training decision (D86)."""
+    age = (train[TIME].max() - train[TIME]).dt.total_seconds() / 86400
+    return np.exp(-age / days).to_numpy()
+
+
+def fit(kind: str, train: pd.DataFrame, seed: int, allow_leaky: bool = False, weights=None, **options) -> Pipeline:
     model = build_model(kind, seed, **options)
     problems = check_columns(model_inputs(model))
     if problems and not allow_leaky:
         raise ValueError("refusing to train on columns that fail the temporal audit: " + "; ".join(problems))
-    return model.fit(train, train[LABEL].astype(int))
+    fit_options = {} if weights is None else {"model__sample_weight": weights}
+    return model.fit(train, train[LABEL].astype(int), **fit_options)
+
+
+class RankBlend:
+    """Average of the two families' scores, each turned into its rank among the TRAINING scores
+    (empirical CDF), so the blend scores one new order alone the same way as in a batch (D86)."""
+
+    def __init__(self, models: dict[str, Pipeline], train: pd.DataFrame):
+        self.models = models
+        self.reference = {name: np.sort(m.predict_proba(train)[:, 1]) for name, m in models.items()}
+
+    def predict_proba(self, frame: pd.DataFrame) -> np.ndarray:
+        ranks = [np.searchsorted(self.reference[name], m.predict_proba(frame)[:, 1], side="right")
+                 / len(self.reference[name]) for name, m in self.models.items()]
+        score = np.mean(ranks, axis=0)
+        return np.column_stack([1 - score, score])
+
+
+# A candidate is a family (logreg, hgb or their blend) with or without recency weights.
+CANDIDATES = tuple(f"{kind}{suffix}" for kind in (*MODEL_KINDS, "blend") for suffix in ("", "+recency"))
+
+
+def fit_candidate(name: str, train: pd.DataFrame, seed: int, recency_days: float, **options):
+    kind, _, weighting = name.partition("+")
+    weights = recency_weights(train, recency_days) if weighting == "recency" else None
+    if kind == "blend":
+        return RankBlend({k: fit(k, train, seed, weights=weights, **options) for k in MODEL_KINDS}, train)
+    return fit(kind, train, seed, weights=weights, **options)
 
 
 # ---------------------------------------------------------------- capacity decision
@@ -196,6 +230,30 @@ def choose_baseline(train: pd.DataFrame, capacity: float) -> tuple[str, pd.DataF
 
 def baseline_scores(frame: pd.DataFrame, column: str, train: pd.DataFrame) -> np.ndarray:
     return frame[column].fillna(train[column].median()).to_numpy(dtype=float)
+
+
+def rolling_origin(frame: pd.DataFrame, origins, horizon_days: int, candidate: str, seed: int,
+                   recency_days: float, capacity: float) -> pd.DataFrame:
+    """The whole procedure again from several cut-offs (D87): for each origin, train on what was
+    known then (same maturity rule), choose the baseline column on that training part, and score
+    the next `horizon_days`. One split can be lucky; several show the spread."""
+    rows = []
+    for origin in origins:
+        origin = pd.Timestamp(origin)
+        split = temporal_split(frame, origin, origin + pd.Timedelta(days=horizon_days))
+        train, test = split.train, split.test
+        if train[LABEL].nunique() < 2 or test[LABEL].nunique() < 2:     # nothing to learn or to score
+            rows.append({"origin": str(origin.date()), "train": len(train), "test": len(test)})
+            continue
+        column, _ = choose_baseline(train, capacity)
+        model = fit_candidate(candidate, train, seed, recency_days)
+        scores = model.predict_proba(test)[:, 1]
+        r = report(test[LABEL], scores, test[TIME], capacity)
+        b = report(test[LABEL], baseline_scores(test, column, train), test[TIME], capacity)
+        rows.append({"origin": str(origin.date()), "train": len(train), "test": len(test),
+                     "negative_rate": r["base_rate"], "model_capture": r["capture"], "baseline_rule": column,
+                     "baseline_capture": b["capture"], "gain": r["capture"] - b["capture"], "roc_auc": r["roc_auc"]})
+    return pd.DataFrame(rows)
 
 
 def psi(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
