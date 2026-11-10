@@ -56,12 +56,12 @@ Total: **3.7 minutes** (budget: 45). Timings go to `data/curated/ews/timings.jso
 data-factory ews-predict --input <folder> --output ranked.csv
 ```
 
-`<folder>` holds new orders in the original Olist file format (same file names and columns):
+`--input` is the new orders file or its folder, in the original Olist file format (same file names and columns):
 
 | File | Required |
 |---|---|
-| `olist_orders_dataset.csv`, `olist_order_items_dataset.csv`, `olist_order_payments_dataset.csv`, `olist_customers_dataset.csv` | yes |
-| `olist_products_dataset.csv`, `olist_sellers_dataset.csv`, `product_category_name_translation.csv` | only for products/sellers the database does not know |
+| `olist_orders_dataset.csv` | yes |
+| `olist_order_items_dataset.csv`, `olist_order_payments_dataset.csv`, `olist_customers_dataset.csv`, `olist_products_dataset.csv`, `olist_sellers_dataset.csv`, `product_category_name_translation.csv` | no: taken from the database when it knows the order, otherwise those features are missing |
 
 Review files are ignored (a review is the order's future). The output has one row per order:
 `order_id, decision_day, risk_score, follow_up, rank_in_day`. A missing column stops with exit
