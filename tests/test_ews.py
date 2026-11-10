@@ -127,6 +127,9 @@ class BlendTests(unittest.TestCase):
         alone = np.array([blend.predict_proba(new.iloc[[i]])[0, 1] for i in (0, 40, 79)])
         np.testing.assert_allclose(alone, batch[[0, 40, 79]])
         self.assertTrue(((batch >= 0) & (batch <= 1)).all())
+        rolling = em.rolling_origin(data, [data[TIME].iloc[150], data[TIME].iloc[200]], 15, "logreg", 1, 30, 0.1)
+        self.assertEqual(len(rolling), 2)
+        self.assertTrue((rolling["train"].diff().dropna() > 0).all())      # later origin, more known history
         weights = em.recency_weights(train, 30)
         self.assertEqual(weights[-1], 1.0)
         self.assertTrue(np.all(np.diff(weights) > 0))
