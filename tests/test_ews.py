@@ -173,6 +173,7 @@ class EwsDatabaseTests(TemporarySchemaMixin, unittest.TestCase):
                                     quarantine=self.root / "q", curated=self.root / "curated")
         ews = dataclasses.replace(config.ews, holidays_years=(2017, 2018), cutoff=pd.Timestamp("2017-09-01"),
                                   evaluation_end=pd.Timestamp("2018-01-01"), output_dir=self.root / "ews",
+                                  rolling_origins=(pd.Timestamp("2017-08-01"), pd.Timestamp("2017-10-01")),
                                   load=dataclasses.replace(config.ews.load, schema=self.ews_schema))
         olist = dataclasses.replace(config.olist, load=dataclasses.replace(config.olist.load, schema=self.schema))
         self.config = dataclasses.replace(config, paths=paths, ews=ews, olist=olist)

@@ -242,6 +242,9 @@ def rolling_origin(frame: pd.DataFrame, origins, horizon_days: int, candidate: s
         origin = pd.Timestamp(origin)
         split = temporal_split(frame, origin, origin + pd.Timedelta(days=horizon_days))
         train, test = split.train, split.test
+        if train[LABEL].nunique() < 2 or test[LABEL].nunique() < 2:     # nothing to learn or to score
+            rows.append({"origin": str(origin.date()), "train": len(train), "test": len(test)})
+            continue
         column, _ = choose_baseline(train, capacity)
         model = fit_candidate(candidate, train, seed, recency_days)
         scores = model.predict_proba(test)[:, 1]
