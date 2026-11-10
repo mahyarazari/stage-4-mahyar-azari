@@ -77,7 +77,8 @@ unchanged (everything runs inside a transaction that is rolled back). Run `data-
 | `report.md` | the reasoning: key decisions, the temporal-leakage section, limits |
 | `decisions.md` | architecture decisions D72–D85 (context, options, decision, accepted costs) |
 | `manager_summary.md` | one page for the operations manager, no technical terms |
-| `data/curated/ews/` | outputs: `followup_list.csv`, `metrics.json`, `capacity.csv`, `monthly.csv`, `drift.csv`, `feature_query_plan.json`, `timings.json`, `model.joblib` |
+| `docs/evidence/ews/` | committed evidence: feature-query plan, metrics, capacity/monthly/drift tables, timings (also of the run on an empty database) |
+| `data/curated/ews/` | outputs (not in Git): `followup_list.csv`, `metrics.json`, `capacity.csv`, `monthly.csv`, `drift.csv`, `feature_query_plan.json`, `timings.json`, `model.joblib` |
 
 ## Project layout
 
