@@ -156,6 +156,27 @@ cost_fp = 1                # rejected, would have repaid: one loan's profit is l
 alt_cost_fn = 4            # sensitivity check: the same matrix with 4 to 1
 model_file = "data/curated/credit/model.joblib"
 
+[ews]
+# Stage 4: early-warning system. Which approved orders will end in a negative review (score 1-2)?
+# External signal (D74): Brazilian national holidays from BrasilAPI (free, no key). The holiday
+# calendar of the coming weeks is known in advance, so it is allowed at approval time.
+holidays_url = "https://brasilapi.com.br/api/feriados/v1"
+holidays_years = [2016, 2017, 2018, 2019]
+# D76: train on decisions before the cut-off whose review was already answered by then (label
+# maturity); evaluate on decisions from the cut-off to evaluation_end (5 months, last = Aug 2018).
+cutoff = 2018-04-01T00:00:00
+evaluation_end = 2018-09-01T00:00:00
+capacity = 0.10            # the support team can follow up at most 10% of the orders
+capacities = [0.05, 0.10, 0.20]
+seed = 42
+feature_budget_ms = 500    # the feature query must run under this (server execution time)
+output_dir = "data/curated/ews"
+
+[ews.load]
+schema = "ews"
+before_load = ["sql/ews/10_tables.sql"]
+after_load = []
+
 [dashboard]
 # The five product-team queries (sql/queries/) are measured with these parameters.
 # Whole history = the heaviest case the dashboard can ask for.

@@ -1,0 +1,35 @@
+{
+ "started_utc": "2026-11-10T10:44:44.925266+00:00",
+ "stages": {
+  "olist": 122.1,
+  "holidays": 0.3,
+  "features": 13.2,
+  "model": 22.0,
+  "followup": 2.3
+ },
+ "results": {
+  "olist": {},
+  "holidays": {},
+  "features": {
+   "feature_query": {
+    "runs": 20,
+    "median_ms": 43.009,
+    "p95_ms": 47.18105,
+    "max_ms": 48.455,
+    "refresh_seconds": 12.26,
+    "budget_ms": 500.0,
+    "within_budget": true
+   }
+  },
+  "model": {
+   "family": "hgb",
+   "capture": 0.22987595671681182
+  },
+  "followup": {
+   "month": "2018-08",
+   "orders": 6673,
+   "to_follow": 681
+  }
+ },
+ "total_seconds": 160.0
+}

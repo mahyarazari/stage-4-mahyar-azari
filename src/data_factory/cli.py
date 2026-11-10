@@ -19,10 +19,10 @@ from pathlib import Path
 
 from sqlalchemy import text
 
-from data_factory import benchmark, credit_pipeline, olist_pipeline, pipeline
+from data_factory import benchmark, credit_pipeline, holidays_pipeline, olist_pipeline, pipeline
 from data_factory.config import load_config
 from data_factory.db import database, ensure_database, safe_url, server_version
-from data_factory.exceptions import ExitCode, FactoryError
+from data_factory.exceptions import ConfigError, ExitCode, FactoryError
 
 log = logging.getLogger("data_factory")
 
@@ -30,8 +30,8 @@ DEFAULT_CONFIG = Path("factory.toml")
 LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 
 
-DATASETS = ("nyc311", "olist", "credit")
-PIPELINES = {"olist": olist_pipeline, "credit": credit_pipeline}
+DATASETS = ("nyc311", "olist", "credit", "holidays")
+PIPELINES = {"olist": olist_pipeline, "credit": credit_pipeline, "holidays": holidays_pipeline}
 
 
 def _stage_order(dataset: str) -> tuple[str, ...]:
@@ -48,6 +48,15 @@ def _stage_list(text: str) -> list[str]:
             f"unknown stage(s) {unknown}; nyc311: {list(pipeline.STAGE_NAMES)}, "
             f"olist: {list(olist_pipeline.STAGE_NAMES)}")
     return requested
+
+
+def _ews_stages(text: str) -> list[str]:
+    from data_factory.ews_pipeline import STAGE_NAMES
+    requested = [name.strip() for name in text.split(",") if name.strip()]
+    unknown = [name for name in requested if name not in STAGE_NAMES]
+    if not requested or unknown:
+        raise ConfigError(f"unknown early-warning stage(s) {unknown}; choose from {list(STAGE_NAMES)}")
+    return [name for name in STAGE_NAMES if name in requested]
 
 
 def _run_dataset(dataset: str, config, args) -> None:
@@ -120,6 +129,13 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--set", dest="query_set", choices=tuple(benchmark.QUERY_SETS), default="baseline",
                        help="which versions of the queries to time (default: baseline)")
     commands.add_parser("index-evidence", help="plans, sizes and write cost of the indexes (rolled back)")
+    ews = commands.add_parser("early-warning", help="stage 4: empty server -> daily follow-up lists, timed")
+    ews.add_argument("--stages", default=None,
+                     help="comma-separated subset of olist,holidays,features,model,followup (default: all)")
+    ews_predict = commands.add_parser("ews-predict", help="rank new orders (folder of Olist-format files)")
+    ews_predict.add_argument("--input", type=Path, required=True,
+                             help="folder with olist_orders/order_items/order_payments/customers_dataset.csv")
+    ews_predict.add_argument("--output", type=Path, required=True, help="CSV of ranked orders")
     predict = commands.add_parser("predict", help="score a new credit file with the saved model")
     predict.add_argument("--input", type=Path, required=True, help="CSV with the schema of cs-training.csv")
     predict.add_argument("--output", type=Path, required=True, help="CSV of probabilities and decisions")
@@ -139,6 +155,18 @@ def main(argv: list[str] | None = None) -> int:
             return ExitCode.OK
         if args.command == "benchmark":
             _benchmark(config, args.label, args.query_set)
+            return ExitCode.OK
+        if args.command == "early-warning":
+            from data_factory import ews_pipeline
+            stages = ews_pipeline.STAGE_NAMES if args.stages is None else _ews_stages(args.stages)
+            timings = ews_pipeline.run(config, stages)
+            log.info("early-warning: done in %.1f s: %s", timings["total_seconds"], timings["stages"])
+            return ExitCode.OK
+        if args.command == "ews-predict":
+            from data_factory.ews_predict import predict_folder
+            result = predict_folder(config, args.input, args.output)
+            log.info("ews-predict: %d orders ranked, %d to follow up -> %s", len(result),
+                     int(result["follow_up"].sum()), args.output)
             return ExitCode.OK
         if args.command == "predict":
             from data_factory.credit_predict import predict_file

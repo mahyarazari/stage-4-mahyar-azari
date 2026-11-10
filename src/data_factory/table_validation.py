@@ -45,8 +45,10 @@ PATTERNS = {
     Kind.ZIP: r"[0-9]{5}",
     Kind.TIMESTAMP: r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}",
     Kind.DATE: r"[0-9]{4}-[0-9]{2}-[0-9]{2} 00:00:00",
+    Kind.DAY: r"[0-9]{4}-[0-9]{2}-[0-9]{2}",
 }
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+DAY_FORMAT = "%Y-%m-%d"
 
 
 def check_value(values: pd.Series, column: Column, bounds: dict[str, tuple[float, float]]):
@@ -55,8 +57,9 @@ def check_value(values: pd.Series, column: Column, bounds: dict[str, tuple[float
     kind = column.kind
     if kind in PATTERNS:
         bad = present & ~values.str.fullmatch(PATTERNS[kind]).fillna(False)
-        if kind in (Kind.TIMESTAMP, Kind.DATE):
-            parsed = pd.to_datetime(values.where(~bad), format=TIMESTAMP_FORMAT, errors="coerce")
+        if kind in (Kind.TIMESTAMP, Kind.DATE, Kind.DAY):
+            parsed = pd.to_datetime(values.where(~bad), format=DAY_FORMAT if kind == Kind.DAY else TIMESTAMP_FORMAT,
+                                    errors="coerce")
             bad |= present & ~bad & parsed.isna()          # e.g. 2017-02-30
         if kind == Kind.DATE:
             values = values.str.slice(0, 10)
