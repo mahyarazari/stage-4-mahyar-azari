@@ -197,7 +197,7 @@ def baseline_scores(frame: pd.DataFrame, column: str, train: pd.DataFrame) -> np
 def psi(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
     """Population stability index: bins from the training quantiles (numbers) or categories."""
     expected, actual = expected.dropna(), actual.dropna()
-    if expected.dtype == object or str(expected.dtype) in ("string", "category"):
+    if not pd.api.types.is_numeric_dtype(expected):
         e = expected.value_counts(normalize=True)
         a = actual.value_counts(normalize=True).reindex(e.index, fill_value=0)
     else:
@@ -212,8 +212,8 @@ def psi(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
 
 
 def drift_table(train: pd.DataFrame, test: pd.DataFrame, columns) -> pd.DataFrame:
-    rows = [{"feature": c, "psi": psi(train[c], test[c]),
-             "train_median": train[c].median() if train[c].dtype != object else train[c].mode().iat[0],
-             "test_median": test[c].median() if test[c].dtype != object else test[c].mode().iat[0]}
-            for c in columns]
+    def typical(values: pd.Series):
+        return values.median() if pd.api.types.is_numeric_dtype(values) else values.mode().iat[0]
+    rows = [{"feature": c, "psi": psi(train[c], test[c]), "train_typical": typical(train[c]),
+             "test_typical": typical(test[c])} for c in columns]
     return pd.DataFrame(rows).sort_values("psi", ascending=False, ignore_index=True)
