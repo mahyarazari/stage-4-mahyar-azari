@@ -256,13 +256,26 @@ class EwsDatabaseTests(TemporarySchemaMixin, unittest.TestCase):
         self.assertEqual(self.query("SELECT count(*) AS n FROM orders")[0].n, before)   # rolled back
         self.assertTrue(ranked["risk_score"].between(0, 1).all())
 
+        known = {hexid(20000 + i) for i in (300, 301, 302)}        # orders the database already holds
+        full, only = self.root / "full", self.root / "only_orders"
+        rows = ews_rows()
+        for table in ("orders", "order_items", "order_payments"):
+            rows[table] = [r for r in rows[table] if r["order_id"] in known]
+        rows["customers"] = [r for r in rows["customers"] if r["customer_id"] in {hexid(1000 + i) for i in (300, 301, 302)}]
+        write_files(full, rows)
+        only.mkdir()
+        shutil.copy(full / "olist_orders_dataset.csv", only)
+        a = predict_folder(self.config, full, self.root / "a.csv").set_index("order_id")
+        b = predict_folder(self.config, only, self.root / "b.csv").set_index("order_id")
+        pd.testing.assert_series_equal(a["risk_score"], b.loc[a.index, "risk_score"])
+
     def test_prediction_refuses_a_wrong_schema_with_a_clear_error(self):
         ews_pipeline.run(self.config, ["model"])
         bad = self.root / "bad"
         write_files(bad, ews_rows(5), drop_column=("orders", "order_estimated_delivery_date"))
         with self.assertRaises(SourceSchemaChangedError):
             predict_folder(self.config, bad, self.root / "out.csv")
-        (bad / next(s.file for s in TABLES if s.table == "order_payments")).unlink()
+        (bad / next(s.file for s in TABLES if s.table == "orders")).unlink()
         with self.assertRaises(MissingInputError):
             predict_folder(self.config, bad, self.root / "out.csv")
 
