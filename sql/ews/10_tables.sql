@@ -1,16 +1,14 @@
 -- Stage 4: early-warning system. The holiday calendar (external API) and the logs of its loads.
--- Recreated on every holidays load; load_runs is a log and is never dropped. The feature
--- objects (sql/ews/20_features.sql) depend on these tables and are recreated after them.
-DROP TABLE IF EXISTS holidays, quarantine CASCADE;
-
-CREATE TABLE holidays (
+-- Emptied and refilled on every holidays load, never dropped: the feature view
+-- (sql/ews/20_features.sql) depends on holidays, and dropping it would drop that view too.
+CREATE TABLE IF NOT EXISTS holidays (
     holiday_date date NOT NULL,
     name         text NOT NULL,
     holiday_type text NOT NULL,              -- 'national' in BrasilAPI
     PRIMARY KEY (holiday_date, name)
 );
 
-CREATE TABLE quarantine (
+CREATE TABLE IF NOT EXISTS quarantine (
     source_table text    NOT NULL,
     source_row   integer NOT NULL,
     record       jsonb   NOT NULL,
@@ -26,3 +24,6 @@ CREATE TABLE IF NOT EXISTS load_runs (
     git_commit     text      NOT NULL,
     files          jsonb     NOT NULL
 );
+
+DELETE FROM holidays;
+DELETE FROM quarantine;
