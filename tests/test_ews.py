@@ -112,6 +112,26 @@ class SplitAndCapacityTests(unittest.TestCase):
         self.assertGreater(em.psi(same, same + 1), 0.2)
 
 
+class BlendTests(unittest.TestCase):
+    def test_blend_scores_one_order_alone_as_in_a_batch_and_recent_orders_weigh_more(self):
+        data = frame(300, seed=4)
+        rng = np.random.default_rng(5)
+        for column in em.model_features("num") + em.model_features("flag"):
+            data[column] = rng.random(300)
+        for column in em.model_features("cat"):
+            data[column] = "x"
+        data["n_items"] = data[LABEL].astype(float) + rng.random(300)
+        train, new = data.iloc[:220], data.iloc[220:]          # new orders: not among the training scores
+        blend = em.fit_candidate("blend+recency", train, seed=1, recency_days=30)
+        batch = blend.predict_proba(new)[:, 1]
+        alone = np.array([blend.predict_proba(new.iloc[[i]])[0, 1] for i in (0, 40, 79)])
+        np.testing.assert_allclose(alone, batch[[0, 40, 79]])
+        self.assertTrue(((batch >= 0) & (batch <= 1)).all())
+        weights = em.recency_weights(train, 30)
+        self.assertEqual(weights[-1], 1.0)
+        self.assertTrue(np.all(np.diff(weights) > 0))
+
+
 class ConfigTests(unittest.TestCase):
     def test_cutoff_after_end_and_unknown_stage_are_rejected(self):
         folder = Path(tempfile.mkdtemp())
