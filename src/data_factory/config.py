@@ -134,6 +134,7 @@ class EwsConfig:
     capacity: float              # share of orders the support team can follow up (operating point)
     capacities: tuple[float, ...]  # capacities of the manager's table
     seed: int
+    recency_days: float          # weight of a training order: exp(-age in days / recency_days) (D86)
     feature_budget_ms: float     # limit for the feature query (server execution time)
     output_dir: Path             # model, follow-up list, timings, plans
 
@@ -419,6 +420,7 @@ def _read_ews(data: dict[str, Any], base: Path) -> EwsConfig:
         holidays_url=_get(section, where, "holidays_url", str).rstrip("/"), holidays_years=tuple(sorted(years)),
         load=load, cutoff=cutoff, evaluation_end=end, capacity=capacity, capacities=capacities,
         seed=int(_get(section, where, "seed", int)),
+        recency_days=float(_positive(_get(section, where, "recency_days", (int, float)), f"[{where}] recency_days")),
         feature_budget_ms=float(_positive(_get(section, where, "feature_budget_ms", (int, float)),
                                           f"[{where}] feature_budget_ms")),
         output_dir=output if output.is_absolute() else (base / output).resolve())

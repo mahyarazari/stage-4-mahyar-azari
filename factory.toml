@@ -169,6 +169,7 @@ evaluation_end = 2018-09-01T00:00:00
 capacity = 0.10            # the support team can follow up at most 10% of the orders
 capacities = [0.05, 0.10, 0.20]
 seed = 42
+recency_days = 180         # D86: recent orders weigh more (exp(-age/180 days)); chosen on time validation
 feature_budget_ms = 500    # the feature query must run under this (server execution time)
 output_dir = "data/curated/ews"
 

@@ -108,16 +108,16 @@ def read_all(config: Config) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
     return frame, stats, cheat
 
 
-def choose_family(train: pd.DataFrame, seed: int, capacity: float) -> tuple[str, pd.DataFrame]:
-    """Model family chosen on the last months of the training period only (the test is not used)."""
+def choose_family(train: pd.DataFrame, seed: int, capacity: float, recency_days: float) -> tuple[str, pd.DataFrame]:
+    """Model chosen on the last months of the training period only (the test is not used)."""
     start = train[TIME].max() - pd.DateOffset(days=int(VALIDATION_MONTHS * 30))
     fit_part = train[(train[TIME] < start) & (train["label_known_at"] < start)]
     valid = train[train[TIME] >= start]
     rows = []
-    for kind in em.MODEL_KINDS:
-        scores = em.fit(kind, fit_part, seed).predict_proba(valid)[:, 1]
+    for name in em.CANDIDATES:
+        scores = em.fit_candidate(name, fit_part, seed, recency_days).predict_proba(valid)[:, 1]
         r = em.report(valid[LABEL], scores, valid[TIME], capacity)
-        rows.append({"model": kind, "validation_capture": r["capture"], "validation_roc_auc": r["roc_auc"]})
+        rows.append({"model": name, "validation_capture": r["capture"], "validation_roc_auc": r["roc_auc"]})
     table = pd.DataFrame(rows).sort_values("validation_capture", ascending=False, ignore_index=True)
     return table.loc[0, "model"], table.assign(validation_from=str(start.date()), fit_rows=len(fit_part),
                                                validation_rows=len(valid))
@@ -133,14 +133,14 @@ def stage_model(config: Config) -> dict:
 
     column, baseline_table = em.choose_baseline(train, E.capacity)
     baseline = em.report(y_test, em.baseline_scores(test, column, train), test[TIME], E.capacity)
-    family, family_table = choose_family(train, E.seed, E.capacity)
+    family, family_table = choose_family(train, E.seed, E.capacity, E.recency_days)
 
     results, scores = {}, {}
-    for kind in em.MODEL_KINDS:                         # both families on the test, for the comparison
-        model = em.fit(kind, train, E.seed)
-        scores[kind] = model.predict_proba(test)[:, 1]
-        results[kind] = em.report(y_test, scores[kind], test[TIME], E.capacity)
-        if kind == family:
+    for name in em.CANDIDATES:                          # every candidate on the test, only for the comparison
+        model = em.fit_candidate(name, train, E.seed, E.recency_days)
+        scores[name] = model.predict_proba(test)[:, 1]
+        results[name] = em.report(y_test, scores[name], test[TIME], E.capacity)
+        if name == family:
             final_model = model
     final = scores[family]
 
@@ -149,8 +149,8 @@ def stage_model(config: Config) -> dict:
     for part in (train_c, test_c):
         part["final_status"] = part["final_status"].astype(str)
         part["flag_status_delivery_mismatch"] = part["flag_status_delivery_mismatch"].astype(float)
-    cheat_model = em.fit(family, train_c, E.seed, allow_leaky=True,
-                         extra_num=tuple(c for c in leaky if c != "final_status"), extra_cat=("final_status",))
+    cheat_model = em.fit_candidate(family, train_c, E.seed, E.recency_days, allow_leaky=True,
+                                   extra_num=tuple(c for c in leaky if c != "final_status"), extra_cat=("final_status",))
     cheat_report = em.report(y_test, cheat_model.predict_proba(test_c)[:, 1], test[TIME], E.capacity)
 
     last_month = test[TIME].dt.to_period("M").max()
