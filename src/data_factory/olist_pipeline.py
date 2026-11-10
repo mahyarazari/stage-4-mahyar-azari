@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -20,7 +19,8 @@ from data_factory.db import database
 from data_factory.file_source import fetch_files, sha256_bytes, sha256_file
 from data_factory.http_client import HttpClient
 from data_factory.loading import TableLoad, load_tables
-from data_factory.manifest import build_code_inputs, describe_outputs, save_manifest, utc_now
+from data_factory.dataset_runs import manifest_header, run_stages
+from data_factory.manifest import build_code_inputs, describe_outputs, save_manifest
 from data_factory.olist_contract import TABLES
 from data_factory.sinks import PostgresSink
 from data_factory.table_validation import QUARANTINE_FILE, STATS_FILE, validate_tables
@@ -109,20 +109,10 @@ def output_files(config: Config) -> dict[str, Path]:
 def record_run(context, status: str, error: str | None = None) -> None:
     config, record = context.config, context.record
     stats_path = work_dir(config) / STATS_FILE
-    inputs = build_code_inputs(config.path)
     present = {name: sha256_file(raw_dir(config) / name) for name in sorted(config.olist.files)
                if (raw_dir(config) / name).exists()}
     manifest = {
-        "dataset": DATASET,
-        "status": status,
-        "error": error,
-        "run": {"run_id": record.run_id, "started_at_utc": record.started_at.isoformat(),
-                "finished_at_utc": utc_now().isoformat(),
-                "elapsed_seconds": round(time.perf_counter() - record.started_clock, 1),
-                "stages": record.stages, "stage_seconds": record.stage_seconds},
-        "code": inputs["code"],
-        "inputs": {"snapshot": snapshot_id(config), "config_file": config.path.name,
-                   "config_sha256": inputs["config_sha256"], "git_commit": inputs["git_commit"]},
+        **manifest_header(context, DATASET, status, error, snapshot_id(config)),
         "source": {"base_url": config.olist.base_url, "files_sha256": present,
                    "all_checksums_match": present == dict(sorted(config.olist.files.items()))},
         "requests": {"this_run": record.http, "full_download": len(config.olist.files)},
@@ -134,15 +124,4 @@ def record_run(context, status: str, error: str | None = None) -> None:
 
 
 def run(context, stage_names: list[str]) -> None:
-    record = context.record
-    try:
-        for name in stage_names:
-            log.info("olist stage %s: start", name)
-            started = time.perf_counter()
-            record.stages.append(name)
-            STAGES[name](context)
-            record.stage_seconds[name] = round(time.perf_counter() - started, 1)
-    except Exception as error:
-        record_run(context, status="failed", error=f"{type(error).__name__}: {error}")
-        raise
-    record_run(context, status="succeeded")
+    run_stages(context, DATASET, stage_names, STAGES, record_run)

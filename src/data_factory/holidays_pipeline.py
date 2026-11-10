@@ -13,7 +13,6 @@ on disk is not requested again (offline repeat runs).
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import asdict
 
 import pandas as pd
@@ -24,7 +23,8 @@ from data_factory.exceptions import InvalidResponseError
 from data_factory.file_source import sha256_file
 from data_factory.http_client import HttpClient
 from data_factory.loading import TableLoad, load_tables
-from data_factory.manifest import build_code_inputs, describe_outputs, save_manifest, utc_now
+from data_factory.dataset_runs import manifest_header, run_stages
+from data_factory.manifest import build_code_inputs, describe_outputs, save_manifest
 from data_factory.olist_contract import Column, Kind, TableSpec
 from data_factory.olist_pipeline import _reasons_to_array
 from data_factory.sinks import PostgresSink
@@ -121,18 +121,10 @@ STAGES = {"fetch": fetch, "validate": validate, "load": load}
 def record_run(context, status: str, error: str | None = None) -> None:
     config, record = context.config, context.record
     stats_path = work_dir(config) / STATS_FILE
-    inputs = build_code_inputs(config.path)
     raw = {f"{year}.json": sha256_file(year_file(config, year)) for year in config.ews.holidays_years
            if year_file(config, year).exists()}
     manifest = {
-        "dataset": DATASET, "status": status, "error": error,
-        "run": {"run_id": record.run_id, "started_at_utc": record.started_at.isoformat(),
-                "finished_at_utc": utc_now().isoformat(),
-                "elapsed_seconds": round(time.perf_counter() - record.started_clock, 1),
-                "stages": record.stages, "stage_seconds": record.stage_seconds},
-        "code": inputs["code"],
-        "inputs": {"snapshot": snapshot_id(config), "config_file": config.path.name,
-                   "config_sha256": inputs["config_sha256"], "git_commit": inputs["git_commit"]},
+        **manifest_header(context, DATASET, status, error, snapshot_id(config)),
         "source": {"url": config.ews.holidays_url, "years": list(config.ews.holidays_years), "raw_sha256": raw},
         "requests": {"this_run": record.http, "full_download": len(config.ews.holidays_years)},
         "counts": json.loads(stats_path.read_text("utf-8")) if stats_path.exists() else None,
@@ -144,14 +136,4 @@ def record_run(context, status: str, error: str | None = None) -> None:
 
 
 def run(context, stage_names: list[str]) -> None:
-    record = context.record
-    try:
-        for name in stage_names:
-            started = time.perf_counter()
-            record.stages.append(name)
-            STAGES[name](context)
-            record.stage_seconds[name] = round(time.perf_counter() - started, 1)
-    except Exception as error:
-        record_run(context, status="failed", error=f"{type(error).__name__}: {error}")
-        raise
-    record_run(context, status="succeeded")
+    run_stages(context, DATASET, stage_names, STAGES, record_run)
