@@ -203,6 +203,10 @@ class EwsDatabaseTests(TemporarySchemaMixin, unittest.TestCase):
         columns = list(self.features().columns)
         self.assertEqual(sorted(columns), sorted(AUDIT))      # a new SQL column without an audit row fails here
 
+    def test_reloading_the_holidays_keeps_the_feature_view(self):
+        ews_pipeline.run(self.config, ["holidays"])
+        self.assertEqual(len(self.features("order_features_live")), len(self.features()))
+
     def test_changing_the_future_changes_no_feature(self):
         """THE LEAK GUARD: rewrite everything that happens after a moment T (later reviews,
         deliveries, statuses). Features of orders decided before T must not move by one bit.
