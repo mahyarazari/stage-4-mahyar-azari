@@ -125,6 +125,15 @@ class ConfigTests(unittest.TestCase):
         self.addCleanup(logging.disable, logging.NOTSET)
         self.assertEqual(main(["--config", str(PROJECT_CONFIG), "early-warning", "--stages", "bake"]), ExitCode.CONFIG)
 
+    def test_prediction_without_a_trained_model_says_what_to_run(self):
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder)
+        config = load_config(PROJECT_CONFIG)
+        config = dataclasses.replace(config, ews=dataclasses.replace(config.ews, output_dir=folder / "empty"))
+        with self.assertRaises(MissingInputError) as caught:
+            predict_folder(config, folder, folder / "out.csv")
+        self.assertIn("data-factory early-warning", str(caught.exception))
+
 
 # ---------------------------------------------------------------- database
 @needs_database
